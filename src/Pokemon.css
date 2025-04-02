@@ -1,0 +1,21 @@
+.RandomPoke {
+    position: relative;
+    display: inline-block;
+    border: 1px solid rgb(38, 34, 34);
+    border-radius: 100px;
+    min-width: 150px;
+    background: radial-gradient(circle, #ffffff, rgb(138, 138, 138));
+
+}
+
+.RandomPoke img {
+    max-width: 70px;
+}
+
+#pokeball {
+    max-width: 65px;
+}
+
+#pokeball:hover {
+    opacity: 50%;
+}

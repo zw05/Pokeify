@@ -1,0 +1,7 @@
+.PokemonList {
+    display: flex;
+    gap: 20px;
+    /* Space between Pokémon */
+    justify-content: center;
+    align-items: center;
+}
