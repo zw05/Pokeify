@@ -45,7 +45,7 @@ class Track(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to the Spotify AI Pokémon App"}
+    return {"message": "Welcome to Pokéify!"} #forgot we call this Pokéify
 
 #login to spotify
 @app.get("/login")
