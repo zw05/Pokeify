@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv #.env file
 import requests
-from fastapi import FastAPI, HTTPException #python web frameowrk
+from fastapi import FastAPI, HTTPException #python web framework
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel #data validation
 from typing import List
@@ -9,6 +9,7 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import google.generativeai as genai
 #and uvicorn is used to start the backend server
+import random #this is for the random shiny pokemon update 4/9/25
 
 # .env 
 load_dotenv()
@@ -45,7 +46,7 @@ class Track(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to Pokéify!"} #forgot we call this Pokéify
+    return {"message": "Welcome to Pokéify!"}
 
 #login to spotify
 @app.get("/login")
@@ -86,38 +87,75 @@ async def generate_pokemon_team(tracks: List[Track]):
         raise HTTPException(status_code=400, detail="No tracks provided for analysis") #apparently error is 400 for spotify PLAYLIST okayyy
     try:
         track_names = [f"{track.name} by {track.artist}" for track in tracks]
-        prompt_text = f"List exactly 6 Pokémon (just their names, comma-separated) whose vibe matches this playlist: {', '.join(track_names)}"
+        prompt_text = f"List exactly 6 Pokémon (just their names, comma-separated) whose vibe matches this playlist: {', '.join(track_names)}. Do not choose any shinies, or any Alolan pokémon."
         model = genai.GenerativeModel("gemini-1.5-flash") #had to change from the gemini pro model bc it wasnt supported anymore
         response = model.generate_content(prompt_text)
         
+    
+
         # SPECIFICALLY TAKE pokémon names from response
         pokemon_names = response.text.strip().split(",")[:6]  # Ensure we get exactly 6 Pokémon
+
+        enforcePokemonprompt = f"For every pokémon chosen in: {', '.join(pokemon_names)} -- list ONLY their corresponding ID number, NO extra 0s only their specific number."
+        #make separate prompt that ties back to the pokemon names that asks Gemini to keep track of the pokemon number in accordance to the pokemon
+        # to fix the issue of some pokemon not popping up -- i made it the enforcePokemonprompt
+        # gonna experiment by making a response_2 but it wont print anything on the front end
+
+        response_2 = model.generate_content(enforcePokemonprompt)
+        #this will be used to be stripped in the indetification_nums
+
+
+        #now im also gonna take SPECIFICALLY the ID numbers
+        identification_nums = response_2.text.strip().split(",")[:6]
 
         # Generate explanation for the Pokémon team -- had to create one long prompt or else Gemini starts tweaking with mulitple ones at the same time
         explanation_prompt = f"The following playlist has these songs: {', '.join(track_names)}. A Pokémon team was chosen for this playlist: {', '.join(pokemon_names)}. Explain why each Pokémon fits the mood and energy of this playlist BRIEFLY. Be creative but concise."
         explanation_response = model.generate_content(explanation_prompt)
         explanation_text = explanation_response.text.strip()
         
-        # Fetch pokémon details from PokeAPI
+        
+
+
         pokemon_team = []
+        index = 0  # keep track of the index for fallback id or else we get multiple pokemon
+        
         for name in pokemon_names:
             name = name.strip().lower()
-            poke_response = requests.get(f"https://pokeapi.co/api/v2/pokemon/{name}") #from the name, we look up the pokémon in the API
+            poke_response = requests.get(f"https://pokeapi.co/api/v2/pokemon/{name}")  # from the name, we look up the Pokémon in the API
+
             if poke_response.status_code == 200:
                 data = poke_response.json()
-                pokemon_id = data['id']  # Get the ID of the Pokémon
-                sprite_url = f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{pokemon_id}.png"
+                pokemon_id = data['id']
+                shiny = random.randint(1, 4096) == 1
+                sprite_url = (
+                    f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/shiny/{pokemon_id}.png"
+                    if shiny else
+                    f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{pokemon_id}.png"
+                    )
                 pokemon_team.append({
                     "name": name.capitalize(),
                     "sprite": sprite_url,
-                    "id": pokemon_id  
-                })
+                    "id": pokemon_id
+                    })
             else:
-                pokemon_team.append({"name": name.capitalize(), "sprite": None})
-        
+                if index < len(identification_nums):
+                    fallback_id = identification_nums[index].strip()
+                    pokemon_id = fallback_id
+                    shiny = random.randint(1, 4096) == 1
+                    sprite_url = (
+                        f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/shiny/{pokemon_id}.png"
+                        if shiny else
+                        f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{pokemon_id}.png"
+                        )
+                    pokemon_team.append({
+                        "name": name.capitalize(),
+                        "sprite": sprite_url,
+                        "id": pokemon_id
+                        })
+            index += 1  # increment after every pokemon name listed or else we get ode pokemon
+
         return {"pokemon_team": pokemon_team, "explanation": explanation_text} # we get both of the returns
     except Exception as e:
         return {"error": str(e)}
-    
     
     
